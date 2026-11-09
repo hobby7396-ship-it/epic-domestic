@@ -3,85 +3,272 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>エピック・ドメスティック 〜等価錬成の冒険ギルド〜</title>
     
-    <!-- 📱 ホーム画面追加（PWA）用の設定 -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="エピドメ">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#020617">
-    
-    <title>エピック・ドメスティック</title>
-    <!-- Tailwind CSS (CDN修復版) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 紙吹雪（canvas-confetti CDN修復版） -->
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-</head>
-<body class="bg-slate-950 text-slate-100 h-screen flex flex-col overflow-hidden p-4 select-none">
-    <header class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4 pt-safe">
-        <div><span id="player-level" class="text-amber-300 font-bold">Lv.1</span> <span id="player-title" class="text-xs text-slate-400">見習い冒険者</span></div>
-        <div class="text-xs">🪙<span id="gold-val">0</span> 🎫<span id="ticket-val">3</span>枚</div>
-    </header>
-    <main class="flex-1 overflow-y-auto space-y-3" id="main-container">
-        <div id="tab-quests" class="space-y-2"></div>
-        <div id="tab-gacha" class="hidden text-center py-8 space-y-4">
-            <div class="text-4xl">✨</div>
-            <button onclick="rollGacha()" class="bg-amber-500 text-slate-950 font-bold px-6 py-2 rounded-xl text-sm active:scale-95 transition-transform">ガチャを回す (チケ1枚)</button>
-        </div>
-        <div id="tab-collection" class="hidden grid grid-cols-2 gap-2 text-xs"></div>
-    </main>
-    <nav class="flex justify-around border-t border-slate-800 pt-3 pb-safe bg-slate-900/50">
-        <button onclick="switchTab('quests')" class="text-amber-400 font-bold text-xs">✅家事</button>
-        <button onclick="switchTab('gacha')" class="text-slate-400 font-bold text-xs">✨ガチャ</button>
-        <button onclick="switchTab('collection')" class="text-slate-400 font-bold text-xs">🔖図鑑</button>
-    </nav>
-    <script>
-        const STORAGE_KEY = 'epic_domestic_v4';
-        let state = { level: 1, exp: 0, gold: 0, tickets: 3, collection: [] };
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231e1b4b'/><path d='M20 25 C20 18 35 18 50 25 C65 18 80 18 80 25 L80 75 C65 68 50 72 50 75 C50 72 35 68 20 75 Z' fill='%23312e81' stroke='%23fbbf24' stroke-width='3'/><line x1='50' y1='25' x2='50' y2='75' stroke='%23fbbf24' stroke-width='2'/><circle cx='50' cy='50' r='16' fill='none' stroke='%2310b981' stroke-width='3' stroke-dasharray='4,2'/><polygon points='50,38 53,47 62,47 55,52 57,61 50,56 43,61 45,52 38,47 47,47' fill='%23fbbf24'/><path d='M30 30 Q50 15 70 30' fill='none' stroke='%2338bdf8' stroke-width='2'/></svg>">
+    <meta name="theme-color" content="#0f172a">
 
-        function loadState() {
-            try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) state = JSON.parse(saved); } catch(e){}
+    <!-- Tailwind CSS & Canvas Confetti -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --sat: env(safe-area-inset-top, 0px);
+            --sab: env(safe-area-inset-bottom, 0px);
         }
+        body {
+            padding-top: var(--sat);
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .main-content {
+            padding-bottom: calc(5rem + var(--sab));
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        @keyframes pulse-gold {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.6)); }
+            50% { transform: scale(1.05); filter: drop-shadow(0 0 15px rgba(251, 191, 36, 0.9)); }
+        }
+        .gacha-card-anim {
+            animation: pulse-gold 2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- ヘッダー -->
+    <header class="bg-slate-900/90 border-b border-slate-800 p-3 px-4 flex justify-between items-center shrink-0 shadow-lg backdrop-blur z-20">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-900 to-amber-600 flex items-center justify-center shadow border border-amber-400/30">
+                <i class="fa-solid font-bold text-amber-300 text-lg fa-scroll"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span id="player-level" class="text-xs font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Lv.1</span>
+                    <h1 class="font-bold text-sm text-slate-200 truncate max-w-[120px]" id="player-title">見習い冒険者</h1>
+                </div>
+                <div class="w-28 bg-slate-800 h-2 rounded-full mt-1 overflow-hidden border border-slate-700">
+                    <div id="exp-bar" class="bg-gradient-to-r from-indigo-500 to-amber-400 h-full w-0 transition-all duration-300"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2.5 text-xs font-semibold">
+            <div class="flex items-center gap-1 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+                <i class="fa-solid fa-coins text-amber-400"></i>
+                <span id="gold-val" class="text-amber-200">0</span>
+            </div>
+            <div class="flex items-center gap-1 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+                <i class="fa-solid fa-ticket text-indigo-400"></i>
+                <span id="ticket-val" class="text-indigo-200">0</span>枚
+            </div>
+        </div>
+    </header>
+
+    <!-- メイン -->
+    <main class="flex-1 overflow-y-auto custom-scroll p-4 main-content" id="main-container">
+        <!-- 家事クエストタブ -->
+        <section id="tab-quests" class="space-y-3">
+            <div class="bg-indigo-950/40 border border-indigo-900/50 p-3 rounded-xl mb-4 flex items-center justify-between">
+                <div>
+                    <h2 class="text-xs font-bold text-indigo-300">本日の冒険ギルド掲示板</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">家事を完了して経験値とガチャチケをゲット！</p>
+                </div>
+                <i class="fa-solid fa-list-check text-indigo-400 text-xl opacity-70"></i>
+            </div>
+            <div id="quest-list" class="space-y-2.5"></div>
+        </section>
+
+        <!-- ガチャタブ -->
+        <section id="tab-gacha" class="hidden flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
+            <div class="relative">
+                <div class="w-36 h-36 rounded-full bg-gradient-to-br from-indigo-600 via-purple-700 to-amber-500 flex items-center justify-center shadow-2xl gacha-card-anim border-4 border-amber-300/40">
+                    <i class="fa-solid fa-wand-magic-sparkles text-5xl text-amber-200"></i>
+                </div>
+            </div>
+            <div>
+                <h2 class="text-lg font-bold text-amber-300">錬金＆大魔法ガチャ</h2>
+                <p class="text-xs text-slate-400 mt-1">チケ1枚で1回召喚！名言カードをゲット</p>
+            </div>
+            <button onclick="rollGacha()" id="btn-gacha" class="w-full max-w-xs bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold py-3 px-6 rounded-xl shadow-lg active:scale-95 text-sm flex items-center justify-center gap-2">
+                <i class="fa-solid fa-ticket text-base"></i>
+                <span>ガチャを回す (チケ1枚)</span>
+            </button>
+        </section>
+
+        <!-- 図鑑タブ -->
+        <section id="tab-collection" class="hidden space-y-4">
+            <h2 class="text-sm font-bold text-slate-200 border-l-4 border-amber-400 pl-2">入手済みコレクション</h2>
+            <div id="collection-grid" class="grid grid-cols-2 gap-3"></div>
+        </section>
+
+        <!-- 名言タブ -->
+        <section id="tab-quotes" class="hidden space-y-4">
+            <h2 class="text-sm font-bold text-slate-200 border-l-4 border-indigo-400 pl-2">冒険者の休息所</h2>
+            <div id="quotes-container" class="space-y-3"></div>
+        </section>
+    </main>
+
+    <!-- ガチャ結果モーダル -->
+    <div id="gacha-modal" class="fixed inset-0 bg-slate-950/90 z-50 flex items-center justify-center p-4 hidden backdrop-blur-md">
+        <div class="bg-slate-900 border-2 border-amber-400/60 rounded-2xl p-6 max-w-xs w-full text-center space-y-4 shadow-2xl">
+            <div id="modal-rarity" class="inline-block px-3 py-1 text-xs font-black rounded-full bg-amber-400 text-slate-950">UR</div>
+            <div id="modal-icon" class="text-4xl my-2 text-amber-300"></div>
+            <h3 id="modal-title" class="font-bold text-base text-slate-100"></h3>
+            <p id="modal-desc" class="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-3 rounded-lg border border-slate-800"></p>
+            <button onclick="closeModal()" class="w-full bg-slate-800 text-slate-200 font-bold py-2 rounded-xl border border-slate-700 text-xs">
+                受け取る
+            </button>
+        </div>
+    </div>
+
+    <!-- ボトムナビ -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-slate-900/95 border-t border-slate-800 px-2 py-2 flex justify-around items-center z-30 backdrop-blur pb-[calc(0.5rem+var(--sab))]">
+        <button onclick="switchTab('quests')" id="nav-quests" class="nav-btn flex flex-col items-center gap-1 text-amber-400 flex-1 py-1">
+            <i class="fa-solid fa-square-check text-base"></i>
+            <span class="text-[10px] font-bold">家事</span>
+        </button>
+        <button onclick="switchTab('gacha')" id="nav-gacha" class="nav-btn flex flex-col items-center gap-1 text-slate-400 flex-1 py-1">
+            <i class="fa-solid fa-wand-magic-sparkles text-base"></i>
+            <span class="text-[10px] font-bold">ガチャ</span>
+        </button>
+        <button onclick="switchTab('collection')" id="nav-collection" class="nav-btn flex flex-col items-center gap-1 text-slate-400 flex-1 py-1">
+            <i class="fa-solid fa-book-bookmark text-base"></i>
+            <span class="text-[10px] font-bold">図鑑</span>
+        </button>
+        <button onclick="switchTab('quotes')" id="nav-quotes" class="nav-btn flex flex-col items-center gap-1 text-slate-400 flex-1 py-1">
+            <i class="fa-solid fa-quote-right text-base"></i>
+            <span class="text-[10px] font-bold">名言</span>
+        </button>
+    </nav>
+
+    <script>
+        const STORAGE_KEY = 'epic_domestic_save_data_v2';
+        let state = {
+            level: 1, exp: 0, gold: 0, tickets: 3, collection: []
+        };
+
+        // データの読み込み（安全な永続化処理）
+        function loadState() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    state = JSON.parse(saved);
+                }
+            } catch (e) {
+                console.error('ロードエラー:', e);
+            }
+        }
+
+        // データの保存
         function saveState() {
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e){}
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            } catch (e) {
+                console.error('セーブエラー:', e);
+            }
             updateUI();
         }
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+
+            if (type === 'clear') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.setValueAtTime(659.25, now + 0.08);
+                osc.frequency.setValueAtTime(783.99, now + 0.16);
+                osc.frequency.setValueAtTime(1046.50, now + 0.24);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            } else if (type === 'gacha') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.3);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                osc.start(now);
+                osc.stop(now + 0.4);
+            }
+        }
+
         const QUESTS = [
-            { id: 1, name: '洗濯物を干す', exp: 40, gold: 50, icon: '👕' },
-            { id: 2, name: '食器洗い・食洗機', exp: 30, gold: 40, icon: '🍽️' },
-            { id: 3, name: '部屋の掃除機がけ', exp: 50, gold: 60, icon: '🧹' },
-            { id: 4, name: 'ゴミ捨て・分別', exp: 25, gold: 30, icon: '🗑️' },
-            { id: 5, name: '名もなき片付け', exp: 20, gold: 20, icon: '✨' },
-            { id: 6, name: 'ご飯の準備・料理', exp: 60, gold: 80, icon: '🍳' },
-            { id: 7, name: '日用品補充・買い物', exp: 45, gold: 50, icon: '🛒' }
+            { id: 1, name: '洗濯物を干す', exp: 40, gold: 50, tickets: 1, icon: 'fa-shirt', color: 'text-sky-400' },
+            { id: 2, name: '食器洗い・食洗機セット', exp: 30, gold: 40, tickets: 1, icon: 'fa-sink', color: 'text-teal-400' },
+            { id: 3, name: '部屋の掃除機がけ', exp: 50, gold: 60, tickets: 1, icon: 'fa-broom', color: 'text-amber-400' },
+            { id: 4, name: 'ゴミ捨て・分別', exp: 25, gold: 30, tickets: 1, icon: 'fa-trash-can', color: 'text-rose-400' },
+            { id: 5, name: '名もなき片付け', exp: 20, gold: 20, tickets: 1, icon: 'fa-hand-sparkles', color: 'text-indigo-400' },
+            { id: 6, name: 'ご飯の準備・料理', exp: 60, gold: 80, tickets: 2, icon: 'fa-utensils', color: 'text-emerald-400' },
+            { id: 7, name: '日用品の補充・買い物', exp: 45, gold: 50, tickets: 1, icon: 'fa-cart-shopping', color: 'text-purple-400' }
         ];
+
         const GACHA_ITEMS = [
-            { id: 'g1', title: '衣服を綺麗に落とす魔法(SSR)', icon: '🪄', desc: '日常の小さな成果を愛でる温かい魔法。' },
-            { id: 'g2', title: '等価交換の錬金術師(UR)', icon: '🧪', desc: '家事の労力＝幸福と平穏。' },
-            { id: 'g3', title: '宮廷薬師の特製栄養剤(SSR)', icon: '💊', desc: '疲れた体に効く特製ドリンク。' },
-            { id: 'g4', title: '全自動かまど(SSR)', icon: '📦', desc: '家事全自動化を夢見る必需品。' },
-            { id: 'g5', title: 'ラーの鏡(UR)', icon: '❤️', desc: '頑張った自分を誇らしく思える宝物。' },
-            { id: 'g6', title: 'Dance Hallの祝福(UR)', icon: '🎵', desc: '貴方の日常は眩しい祝祭だ！' }
+            { id: 'g1', title: '民間魔法: 衣服の汚れを綺麗に落とす魔法', rarity: 'SSR', icon: 'fa-wand-magic', desc: '『葬送のフリーレン』より。日常の小さな成果を愛でる温かい魔法。' },
+            { id: 'g2', title: '等価交換の錬金術師', rarity: 'UR', icon: 'fa-vial', desc: '『鋼の錬金術師』より。「家事の労力＝幸福と平穏」。' },
+            { id: 'g3', title: '宮廷薬師の特製栄養剤', rarity: 'SSR', icon: 'fa-flask-vial', desc: '『薬屋のひとりごと』猫猫の知識。疲れた体に効く特製ドリンク。' },
+            { id: 'g4', title: 'ダイヤモンドの全自動かまど', rarity: 'SSR', icon: 'fa-cube', desc: '『マインクラフト』より。家事全自動化を夢見る冒険者の必需品。' },
+            { id: 'g5', title: 'ラーの鏡', rarity: 'UR', icon: 'fa-hand-holding-heart', desc: '『ドラゴンクエスト』より。頑張った自分を誇らしく思える宝物。' },
+            { id: 'g6', title: '青と夏 / Dance Hall の祝福', rarity: 'UR', icon: 'fa-music', desc: '『Mrs. GREEN APPLE』より。「貴方の日常はいつだって眩しい祝祭だ！」' }
+        ];
+
+        const QUOTES = [
+            { work: '葬送のフリーレン', text: '「努力した者はみんな偉いんだよ。」' },
+            { work: '鋼の錬金術師', text: '「立って歩け。前へ進め。あんたには立派な足がついているじゃないか。」' },
+            { work: '薬屋のひとりごと', text: '「毒も薬も使いよう。休むこともまた重要な選択だよ。」' },
+            { work: 'Mrs. GREEN APPLE', text: '「大丈夫、僕らは運命の味方さ。」' }
         ];
 
         function updateUI() {
-            document.getElementById('player-level').innerText = 'Lv.' + state.level;
+            const nextExp = state.level * 100;
+            document.getElementById('player-level').innerText = `Lv.${state.level}`;
+            document.getElementById('exp-bar').style.width = `${Math.min(100, (state.exp / nextExp) * 100)}%`;
             document.getElementById('gold-val').innerText = state.gold;
             document.getElementById('ticket-val').innerText = state.tickets;
-            document.getElementById('player-title').innerText = state.level >= 10 ? '伝説の錬金家事師' : (state.level >= 5 ? '一級家事官' : '見習い冒険者');
+
+            if (state.level >= 10) document.getElementById('player-title').innerText = '伝説の錬金家事師';
+            else if (state.level >= 5) document.getElementById('player-title').innerText = '魔法使い一級家事官';
+            else document.getElementById('player-title').innerText = '見習い冒険者';
         }
 
         function renderQuests() {
-            document.getElementById('tab-quests').innerHTML = QUESTS.map(q => `
+            const container = document.getElementById('quest-list');
+            container.innerHTML = QUESTS.map(q => `
                 <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between shadow">
                     <div class="flex items-center gap-3">
-                        <span class="text-xl">${q.icon}</span>
+                        <div class="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center text-base ${q.color}">
+                            <i class="fa-solid ${q.icon}"></i>
+                        </div>
                         <div>
-                            <h3 class="font-bold text-xs">${q.name}</h3>
-                            <div class="text-[10px] text-slate-400 mt-0.5">+${q.exp}EXP • +${q.gold}G • +1チケット</div>
+                            <h3 class="font-bold text-xs text-slate-200">${q.name}</h3>
+                            <div class="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5">
+                                <span class="text-amber-400 font-semibold">+${q.exp}EXP</span>
+                                <span>•</span>
+                                <span class="text-amber-300">+${q.gold}G</span>
+                                <span>•</span>
+                                <span class="text-indigo-300">+${q.tickets}チケ</span>
+                            </div>
                         </div>
                     </div>
-                    <button onclick="completeQuest(${q.id})" class="bg-indigo-600 text-white font-bold text-xs px-3 py-1.5 rounded-lg active:scale-95 transition-transform">完了</button>
+                    <button onclick="completeQuest(${q.id})" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition">
+                        完了
+                    </button>
                 </div>
             `).join('');
         }
@@ -89,59 +276,95 @@
         function completeQuest(id) {
             const q = QUESTS.find(item => item.id === id);
             if (!q) return;
+
             state.exp += q.exp;
             state.gold += q.gold;
-            state.tickets += 1;
-            if (state.exp >= state.level * 100) {
+            state.tickets += q.tickets;
+
+            const nextExp = state.level * 100;
+            if (state.exp >= nextExp) {
                 state.level += 1;
-                state.exp = 0;
+                state.exp -= nextExp;
             }
-            if (typeof confetti === 'function') {
-                confetti({ particleCount: 30, spread: 60, origin: { y: 0.8 } });
-            }
+
+            playSound('clear');
+            confetti({ particleCount: 40, spread: 60, origin: { y: 0.8 } });
             saveState();
         }
 
         function rollGacha() {
             if (state.tickets < 1) {
-                alert('チケットが足りません！');
+                alert('ガチャチケットが足りません！');
                 return;
             }
             state.tickets -= 1;
+            playSound('gacha');
+
             const item = GACHA_ITEMS[Math.floor(Math.random() * GACHA_ITEMS.length)];
-            if (!state.collection.includes(item.id)) state.collection.push(item.id);
+            if (!state.collection.includes(item.id)) {
+                state.collection.push(item.id);
+            }
             saveState();
-            alert('【' + item.title + '】を獲得！\n' + item.desc);
+            showModal(item);
+        }
+
+    // Modal helpers
+        function showModal(item) {
+            document.getElementById('modal-rarity').innerText = item.rarity;
+            document.getElementById('modal-icon').innerHTML = `<i class="fa-solid ${item.icon}"></i>`;
+            document.getElementById('modal-title').innerText = item.title;
+            document.getElementById('modal-desc').innerText = item.desc;
+            document.getElementById('gacha-modal').classList.remove('hidden');
+            confetti({ particleCount: 70, spread: 70, origin: { y: 0.5 } });
+        }
+
+        function closeModal() {
+            document.getElementById('gacha-modal').classList.add('hidden');
         }
 
         function renderCollection() {
-            document.getElementById('tab-collection').innerHTML = GACHA_ITEMS.map(item => {
+            const grid = document.getElementById('collection-grid');
+            grid.innerHTML = GACHA_ITEMS.map(item => {
                 const unlocked = state.collection.includes(item.id);
-                return `<div class="bg-slate-900 border ${unlocked ? 'border-amber-400' : 'border-slate-800' } ${unlocked ? '' : 'opacity-40'} p-3 rounded-xl text-center space-y-1">
-                    <div class="text-lg">${unlocked ? item.icon : '❓'}</div>
-                    <div class="font-bold">${unlocked ? item.title : '？？？'}</div>
-                </div>`;
+                return `
+                    <div class="bg-slate-900 border ${unlocked ? 'border-amber-400/40' : 'border-slate-800 opacity-50'} p-3 rounded-xl flex flex-col items-center text-center space-y-1.5">
+                        <div class="w-9 h-9 rounded-full ${unlocked ? 'bg-amber-400/20 text-amber-300' : 'bg-slate-800 text-slate-600'} flex items-center justify-center text-base">
+                            <i class="fa-solid ${item.icon}"></i>
+                        </div>
+                        <div class="text-[9px] font-bold px-1.5 py-0.5 rounded ${unlocked ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-500'}">${item.rarity}</div>
+                        <h4 class="text-xs font-bold text-slate-200">${unlocked ? item.title : '？？？？？？'}</h4>
+                    </div>
+                `;
             }).join('');
         }
 
-        function switchTab(tabName) {
-            ['quests', 'gacha', 'collection'].forEach(t => {
-                document.getElementById('tab-' + t).classList.add('hidden');
-                const btn = document.querySelector(`nav button[onclick*="${t}"]`);
-                if(btn) {
-                    if(t === tabName) {
-                        btn.classList.add('text-amber-400');
-                        btn.classList.remove('text-slate-400');
-                    } else {
-                        btn.classList.remove('text-amber-400');
-                        btn.classList.add('text-slate-400');
-                    }
-                }
-            });
-            document.getElementById('tab-' + tabName).classList.remove('hidden');
-            if (tabName === 'collection') renderCollection();
+        function renderQuotes() {
+            const container = document.getElementById('quotes-container');
+            container.innerHTML = QUOTES.map(q => `
+                <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-xl space-y-1.5">
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">${q.work}</span>
+                    <p class="text-xs text-slate-200 font-medium leading-relaxed">${q.text}</p>
+                </div>
+            `).join('');
         }
 
+        function switchTab(tabName) {
+            ['quests', 'gacha', 'collection', 'quotes'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.add('hidden');
+                const btn = document.getElementById(`nav-${t}`);
+                btn.classList.remove('text-amber-400');
+                btn.classList.add('text-slate-400');
+            });
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`nav-${tabName}`);
+            activeBtn.classList.remove('text-slate-400');
+            activeBtn.classList.add('text-amber-400');
+
+            if (tabName === 'collection') renderCollection();
+            if (tabName === 'quotes') renderQuotes();
+        }
+
+        // 初期化実行
         loadState();
         renderQuests();
         updateUI();

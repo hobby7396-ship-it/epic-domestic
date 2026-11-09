@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- 📱 ホーム画面追加（PWA）用の設定 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="エピドメ">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#020617">
+    
+    <title>エピック・ドメスティック</title>
+    <!-- Tailwind CSS (CDN修復版) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 紙吹雪（canvas-confetti CDN修復版） -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 h-screen flex flex-col overflow-hidden p-4 select-none">
+    <header class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4 pt-safe">
+        <div><span id="player-level" class="text-amber-300 font-bold">Lv.1</span> <span id="player-title" class="text-xs text-slate-400">見習い冒険者</span></div>
+        <div class="text-xs">🪙<span id="gold-val">0</span> 🎫<span id="ticket-val">3</span>枚</div>
+    </header>
+    <main class="flex-1 overflow-y-auto space-y-3" id="main-container">
+        <div id="tab-quests" class="space-y-2"></div>
+        <div id="tab-gacha" class="hidden text-center py-8 space-y-4">
+            <div class="text-4xl">✨</div>
+            <button onclick="rollGacha()" class="bg-amber-500 text-slate-950 font-bold px-6 py-2 rounded-xl text-sm active:scale-95 transition-transform">ガチャを回す (チケ1枚)</button>
+        </div>
+        <div id="tab-collection" class="hidden grid grid-cols-2 gap-2 text-xs"></div>
+    </main>
+    <nav class="flex justify-around border-t border-slate-800 pt-3 pb-safe bg-slate-900/50">
+        <button onclick="switchTab('quests')" class="text-amber-400 font-bold text-xs">✅家事</button>
+        <button onclick="switchTab('gacha')" class="text-slate-400 font-bold text-xs">✨ガチャ</button>
+        <button onclick="switchTab('collection')" class="text-slate-400 font-bold text-xs">🔖図鑑</button>
+    </nav>
+    <script>
+        const STORAGE_KEY = 'epic_domestic_v4';
+        let state = { level: 1, exp: 0, gold: 0, tickets: 3, collection: [] };
+
+        function loadState() {
+            try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) state = JSON.parse(saved); } catch(e){}
+        }
+        function saveState() {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e){}
+            updateUI();
+        }
+        const QUESTS = [
+            { id: 1, name: '洗濯物を干す', exp: 40, gold: 50, icon: '👕' },
+            { id: 2, name: '食器洗い・食洗機', exp: 30, gold: 40, icon: '🍽️' },
+            { id: 3, name: '部屋の掃除機がけ', exp: 50, gold: 60, icon: '🧹' },
+            { id: 4, name: 'ゴミ捨て・分別', exp: 25, gold: 30, icon: '🗑️' },
+            { id: 5, name: '名もなき片付け', exp: 20, gold: 20, icon: '✨' },
+            { id: 6, name: 'ご飯の準備・料理', exp: 60, gold: 80, icon: '🍳' },
+            { id: 7, name: '日用品補充・買い物', exp: 45, gold: 50, icon: '🛒' }
+        ];
+        const GACHA_ITEMS = [
+            { id: 'g1', title: '衣服を綺麗に落とす魔法(SSR)', icon: '🪄', desc: '日常の小さな成果を愛でる温かい魔法。' },
+            { id: 'g2', title: '等価交換の錬金術師(UR)', icon: '🧪', desc: '家事の労力＝幸福と平穏。' },
+            { id: 'g3', title: '宮廷薬師の特製栄養剤(SSR)', icon: '💊', desc: '疲れた体に効く特製ドリンク。' },
+            { id: 'g4', title: '全自動かまど(SSR)', icon: '📦', desc: '家事全自動化を夢見る必需品。' },
+            { id: 'g5', title: 'ラーの鏡(UR)', icon: '❤️', desc: '頑張った自分を誇らしく思える宝物。' },
+            { id: 'g6', title: 'Dance Hallの祝福(UR)', icon: '🎵', desc: '貴方の日常は眩しい祝祭だ！' }
+        ];
+
+        function updateUI() {
+            document.getElementById('player-level').innerText = 'Lv.' + state.level;
+            document.getElementById('gold-val').innerText = state.gold;
+            document.getElementById('ticket-val').innerText = state.tickets;
+            document.getElementById('player-title').innerText = state.level >= 10 ? '伝説の錬金家事師' : (state.level >= 5 ? '一級家事官' : '見習い冒険者');
+        }
+
+        function renderQuests() {
+            document.getElementById('tab-quests').innerHTML = QUESTS.map(q => `
+                <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between shadow">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">${q.icon}</span>
+                        <div>
+                            <h3 class="font-bold text-xs">${q.name}</h3>
+                            <div class="text-[10px] text-slate-400 mt-0.5">+${q.exp}EXP • +${q.gold}G • +1チケット</div>
+                        </div>
+                    </div>
+                    <button onclick="completeQuest(${q.id})" class="bg-indigo-600 text-white font-bold text-xs px-3 py-1.5 rounded-lg active:scale-95 transition-transform">完了</button>
+                </div>
+            `).join('');
+        }
+
+        function completeQuest(id) {
+            const q = QUESTS.find(item => item.id === id);
+            if (!q) return;
+            state.exp += q.exp;
+            state.gold += q.gold;
+            state.tickets += 1;
+            if (state.exp >= state.level * 100) {
+                state.level += 1;
+                state.exp = 0;
+            }
+            if (typeof confetti === 'function') {
+                confetti({ particleCount: 30, spread: 60, origin: { y: 0.8 } });
+            }
+            saveState();
+        }
+
+        function rollGacha() {
+            if (state.tickets < 1) {
+                alert('チケットが足りません！');
+                return;
+            }
+            state.tickets -= 1;
+            const item = GACHA_ITEMS[Math.floor(Math.random() * GACHA_ITEMS.length)];
+            if (!state.collection.includes(item.id)) state.collection.push(item.id);
+            saveState();
+            alert('【' + item.title + '】を獲得！\n' + item.desc);
+        }
+
+        function renderCollection() {
+            document.getElementById('tab-collection').innerHTML = GACHA_ITEMS.map(item => {
+                const unlocked = state.collection.includes(item.id);
+                return `<div class="bg-slate-900 border ${unlocked ? 'border-amber-400' : 'border-slate-800' } ${unlocked ? '' : 'opacity-40'} p-3 rounded-xl text-center space-y-1">
+                    <div class="text-lg">${unlocked ? item.icon : '❓'}</div>
+                    <div class="font-bold">${unlocked ? item.title : '？？？'}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function switchTab(tabName) {
+            ['quests', 'gacha', 'collection'].forEach(t => {
+                document.getElementById('tab-' + t).classList.add('hidden');
+                const btn = document.querySelector(`nav button[onclick*="${t}"]`);
+                if(btn) {
+                    if(t === tabName) {
+                        btn.classList.add('text-amber-400');
+                        btn.classList.remove('text-slate-400');
+                    } else {
+                        btn.classList.remove('text-amber-400');
+                        btn.classList.add('text-slate-400');
+                    }
+                }
+            });
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+            if (tabName === 'collection') renderCollection();
+        }
+
+        loadState();
+        renderQuests();
+        updateUI();
+    </script>
+</body>
+</html>
